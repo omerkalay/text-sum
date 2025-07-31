@@ -61,8 +61,13 @@ def summarize_text(text: str, target_length: int = 150) -> str:
         200: (180, 220)   # Long: 180-220 words
     }
     
-    # Get target range
-    min_target, max_target = target_ranges.get(target_length, (target_length - 20, target_length + 20))
+    # Get target range with safer fallback
+    if target_length in target_ranges:
+        min_target, max_target = target_ranges[target_length]
+    else:
+        # Fallback for any unexpected values
+        min_target = max(50, target_length - 20)
+        max_target = target_length + 20
     
     # Try up to 3 attempts with different parameters
     for attempt in range(3):
@@ -109,19 +114,21 @@ def summarize_text(text: str, target_length: int = 150) -> str:
                 else:
                     summary = result.get("summary_text", "Summary generation failed")
                 
-                # Check if summary length is in target range
-                summary_word_count = len(summary.split())
+                # Check if we got a valid summary
+                if summary and summary != "Summary generation failed":
+                    summary_word_count = len(summary.split())
+                    
+                    # If within target range, return it
+                    if min_target <= summary_word_count <= max_target:
+                        return summary
+                    
+                    # If not in range and this is the last attempt, return anyway
+                    if attempt == 2:
+                        return summary
                 
-                # If within target range, return it
-                if min_target <= summary_word_count <= max_target:
-                    return summary
-                
-                # If not in range and this is the last attempt, return anyway
+                # If we're here, try next attempt (if not last)
                 if attempt == 2:
-                    return summary
-                
-                # Continue to next attempt
-                continue
+                    return summary if summary else "Summary generation failed"
                 
             else:
                 if attempt == 2:
