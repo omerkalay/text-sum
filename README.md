@@ -11,7 +11,7 @@ A modern web application that leverages AI to generate concise summaries from PD
 - **PDF Processing**: Extract and summarize text from PDF files
 - **Smart Length Control**: Optimized single-call system with intelligent parameter tuning
 - **AI Summarization**: BART model with dynamic parameters optimized for text complexity
-- **Target Length Options**: Short (~100 words), Medium (~150 words), Long (~200 words)
+- **Flexible Summary Lengths**: Short, Medium, and Long options adaptive to text complexity
 - **Modern UI**: Dark/light theme with smooth animations and user guidance tooltips
 - **Drag & Drop**: Easy file upload interface with content warnings
 - **Export Options**: Download summaries or copy to clipboard
@@ -60,10 +60,10 @@ python main.py
 
 ## 🧠 Advanced AI Features
 
-- **Intelligent Parameter Optimization**: Dynamic `length_penalty`, `min_length`, and `max_length` based on target selection
-- **Text-Aware Processing**: Parameters automatically adjust based on input text length and complexity  
+- **Adaptive Length Control**: AI adjusts summary length based on content complexity and user preference
+- **Smart Parameter Tuning**: Automatic optimization of AI model parameters for best results
 - **User Guidance System**: Tooltip recommendations for optimal text length ranges
-- **Free Plan Optimized**: Single efficient API call designed for Hugging Face free tier
+- **Free Tier Optimized**: Efficient single API call designed for reliable performance
 
 ## 📄 License
 
