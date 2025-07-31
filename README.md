@@ -9,12 +9,13 @@ A modern web application that leverages AI to generate concise summaries from PD
 ## 🚀 Features
 
 - **PDF Processing**: Extract and summarize text from PDF files
-- **Text Summarization**: AI-powered summarization using Hugging Face BART model
-- **Modern UI**: Dark/light theme with smooth animations
-- **Drag & Drop**: Easy file upload interface
-- **Smart Controls**: Adjustable summary length, character counter
+- **Intelligent Length Control**: Adaptive 3-attempt retry system for precise summary lengths
+- **Smart AI Summarization**: BART model with dynamic parameters based on text complexity
+- **Target Length Ranges**: Short (80-120 words), Medium (130-170 words), Long (180-220 words)
+- **Modern UI**: Dark/light theme with smooth animations and user guidance tooltips
+- **Drag & Drop**: Easy file upload interface with content warnings
 - **Export Options**: Download summaries or copy to clipboard
-- **Mobile Responsive**: Works on all devices
+- **Mobile Responsive**: Works seamlessly on all devices
 
 ## 🛠️ Tech Stack
 
@@ -54,8 +55,15 @@ python main.py
 ## 📋 API Endpoints
 
 - `POST /summarize-pdf` - Upload and summarize PDF files
-- `POST /summarize-text` - Summarize text input
+- `POST /summarize-text` - Summarize text input with intelligent length control
 - `GET /health` - API health check
+
+## 🧠 Advanced AI Features
+
+- **Adaptive Retry Logic**: Automatically retries with escalating parameters if target length not achieved
+- **Smart Parameter Tuning**: `length_penalty`, `num_beams`, and `min_length` adjust based on text complexity
+- **User Guidance System**: Tooltip recommendations for optimal text length ranges
+- **Quality Assurance**: 3-attempt system ensures consistent results within target ranges
 
 ## 📄 License
 
