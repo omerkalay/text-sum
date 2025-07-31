@@ -1,7 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 import requests
 import pdfplumber
 import os
@@ -16,9 +15,6 @@ except:
     pass
 
 app = FastAPI(title="AI Text Summarizer", description="PDF and Text Summarization API using Hugging Face")
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS middleware for frontend communication
 app.add_middleware(
@@ -84,70 +80,75 @@ def summarize_text(text: str, max_length: int = 150) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the main HTML page"""
+    """API root endpoint"""
     return """
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>AI Text Summarizer</title>
-        <link rel="stylesheet" href="/static/style.css">
+        <title>AI Text Summarizer API</title>
+        <style>
+            body { 
+                font-family: system-ui; 
+                max-width: 800px; 
+                margin: 40px auto; 
+                padding: 0 20px; 
+                line-height: 1.6;
+                background: #1a1a1a;
+                color: #ffffff;
+            }
+            pre { 
+                background: #2a2a2a; 
+                padding: 15px; 
+                border-radius: 5px; 
+                overflow-x: auto;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            code { 
+                background: #2a2a2a; 
+                padding: 2px 5px; 
+                border-radius: 3px;
+                color: #00d4ff;
+            }
+            a {
+                color: #00d4ff;
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+        </style>
     </head>
     <body>
-        <div class="container">
-            <header>
-                <h1>🤖 AI Text Summarizer</h1>
-                <p>Upload a PDF or enter text to get an AI-powered summary</p>
-            </header>
-            
-            <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('pdf')">📄 PDF Upload</button>
-                <button class="tab-btn" onclick="switchTab('text')">📝 Text Input</button>
-            </div>
-            
-            <div id="pdf-tab" class="tab-content active">
-                <form id="pdf-form" enctype="multipart/form-data">
-                    <div class="file-upload">
-                        <input type="file" id="pdf-file" name="file" accept=".pdf" required>
-                        <label for="pdf-file">Choose PDF file</label>
-                    </div>
-                    <button type="submit" class="submit-btn">Summarize PDF</button>
-                </form>
-            </div>
-            
-            <div id="text-tab" class="tab-content">
-                <form id="text-form">
-                    <textarea id="input-text" name="text" placeholder="Enter your text here..." required></textarea>
-                    <div class="options">
-                        <label for="max-length">Summary Length:</label>
-                        <select id="max-length" name="max_length">
-                            <option value="100">Short (100 words)</option>
-                            <option value="150" selected>Medium (150 words)</option>
-                            <option value="200">Long (200 words)</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="submit-btn">Summarize Text</button>
-                </form>
-            </div>
-            
-            <div id="result" class="result-container" style="display: none;">
-                <h3>📋 Summary</h3>
-                <div id="summary-text" class="summary-text"></div>
-                <div class="stats">
-                    <span id="original-length"></span>
-                    <span id="summary-length"></span>
-                </div>
-                <button onclick="downloadSummary()" class="download-btn">📥 Download Summary</button>
-            </div>
-            
-            <div id="loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating summary...</p>
-            </div>
-        </div>
+        <h1>🤖 AI Text Summarizer API</h1>
+        <p>This is the API server for the AI Text Summarizer. The frontend is hosted at <a href="https://omerkalay.github.io/text-sum">https://omerkalay.github.io/text-sum</a></p>
         
-        <script src="/static/script.js"></script>
+        <h2>API Endpoints:</h2>
+        <ul>
+            <li><code>POST /summarize-text</code> - Summarize text input</li>
+            <li><code>POST /summarize-pdf</code> - Summarize PDF file</li>
+            <li><code>GET /health</code> - Health check endpoint</li>
+        </ul>
+        
+        <h2>Example Usage:</h2>
+        <pre>
+// Summarize Text
+fetch('https://text-sum-7t1f.onrender.com/summarize-text', {
+    method: 'POST',
+    body: new FormData({
+        text: 'Your long text here...',
+        max_length: 150
+    })
+})
+
+// Summarize PDF
+const formData = new FormData();
+formData.append('file', pdfFile);
+fetch('https://text-sum-7t1f.onrender.com/summarize-pdf', {
+    method: 'POST',
+    body: formData
+})</pre>
+        
+        <p>For more information, visit the <a href="https://github.com/omerkalay/text-sum">GitHub repository</a>.</p>
     </body>
     </html>
     """
