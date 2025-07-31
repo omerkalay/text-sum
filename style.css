@@ -427,6 +427,34 @@ body {
     box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
 }
 
+/* Custom Tooltip Styling */
+.text-options select option {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: var(--spacing-sm);
+}
+
+.text-options select option:hover {
+    background: var(--accent-primary);
+    color: white;
+}
+
+/* Tooltip enhancement */
+.text-options select option[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    color: var(--text-primary);
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-top: 20px;
+    box-shadow: var(--shadow-md);
+}
+
 .textarea-container {
     position: relative;
     margin-bottom: var(--spacing-xl);

@@ -54,22 +54,31 @@ def extract_text_from_pdf(pdf_file: UploadFile) -> str:
 def summarize_text(text: str, max_length: int = 150) -> str:
     """Summarize text using Hugging Face API"""
     try:
-        # Prepare the request payload
-        # Dynamic min_length based on max_length for better consistency
-        min_length = min(30, max(10, max_length // 4))  # 25% of max_length, but at least 10
+        # Calculate text metrics for better min_length
+        text_word_count = len(text.split())
+        
+        # Dynamic min_length based on text size and target length
+        if text_word_count <= 1500:  # Short text
+            min_length = max(50, max_length // 3)  # More conservative for short texts
+        elif text_word_count <= 3000:  # Medium text
+            min_length = max(80, max_length // 2)  # Standard approach
+        else:  # Long text
+            min_length = max(100, max_length // 2)  # Higher minimum for long texts
         
         payload = {
             "inputs": text,
             "parameters": {
                 "max_length": max_length,
                 "min_length": min_length,
-                "do_sample": False,
-                "length_penalty": 1.0,  # Encourage target length
-                "no_repeat_ngram_size": 3  # Avoid repetition
+                "do_sample": True,  # Enable sampling for more variety
+                "length_penalty": 2.0,  # Strong penalty for short summaries
+                "num_beams": 4,  # Use beam search for better quality
+                "early_stopping": True,
+                "no_repeat_ngram_size": 3
             }
         }
         
-        response = requests.post(PEGASUS_API_URL, headers=headers, json=payload)
+        response = requests.post(BART_API_URL, headers=headers, json=payload)
         
         if response.status_code == 200:
             result = response.json()
@@ -191,8 +200,22 @@ async def summarize_text_endpoint(
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
-    # Limit max_length to reasonable bounds
-    max_length = max(50, min(500, max_length))
+    # Dynamic length calculation based on text size and user selection
+    text_word_count = len(text.split())
+    
+    # Adjust max_length based on text length and tooltip recommendations
+    if text_word_count <= 1500:  # Short text range
+        if max_length >= 150:  # User selected Medium/Long but text is short
+            max_length = max(max_length * 2, 200)  # More conservative boost
+        else:
+            max_length = max_length * 2  # Short selection, appropriate boost
+    elif text_word_count <= 3000:  # Medium text range  
+        max_length = max_length * 2.5  # Standard boost
+    else:  # Long text (3000+ words)
+        max_length = max_length * 3  # Full boost for long texts
+    
+    # Final bounds check
+    max_length = max(100, min(1000, max_length))
     
     # Summarize the text
     summary = summarize_text(text, max_length)
