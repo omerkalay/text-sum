@@ -1,6 +1,6 @@
 // AI Summarizer - Modern JavaScript
 
-const API_BASE_URL = 'https://text-sum-7t1f.onrender.com'; // Replace with your actual backend URL
+const API_BASE_URL = 'https://text-sum-7t11.onrender.com'; // Your actual backend URL
 
 // DOM Elements
 const pdfForm = document.getElementById('pdf-form');
