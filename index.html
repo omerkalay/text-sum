@@ -76,6 +76,12 @@
                         </div>
                         <h3>Upload Your PDF</h3>
                         <p>Drag and drop your PDF file or click to browse</p>
+                        
+                        <!-- PDF Warning -->
+                        <div class="warning-message">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span><strong>Note:</strong> PDFs should contain text-only content for best results. Images and complex layouts may affect summarization quality.</span>
+                        </div>
                         <form id="pdf-form" enctype="multipart/form-data">
                             <div class="file-upload-area" id="file-upload-area">
                                 <input type="file" id="pdf-file" name="file" accept=".pdf" required>
@@ -106,6 +112,12 @@
                                     <option value="200">Long (200 words)</option>
                                 </select>
                             </div>
+                        </div>
+                        
+                        <!-- Text Length Warning -->
+                        <div class="warning-message info">
+                            <i class="fas fa-info-circle"></i>
+                            <span><strong>Tip:</strong> Summary length may vary based on text complexity. Very long or short texts might affect summarization accuracy.</span>
                         </div>
                         <form id="text-form">
                             <div class="textarea-container">

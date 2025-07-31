@@ -844,6 +844,46 @@ body {
     animation: slideUp 0.5s ease;
 }
 
+/* Warning Messages */
+.warning-message {
+    background: linear-gradient(135deg, rgba(255, 170, 0, 0.1) 0%, rgba(255, 68, 68, 0.1) 100%);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin: var(--spacing-md) 0;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.warning-message i {
+    color: var(--accent-warning);
+    font-size: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.warning-message span {
+    color: var(--text-secondary);
+}
+
+.warning-message strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Info variant for text warnings */
+.warning-message.info {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 153, 204, 0.1) 100%);
+    border-color: rgba(0, 212, 255, 0.3);
+}
+
+.warning-message.info i {
+    color: var(--accent-primary);
+}
+
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
     width: 8px;
