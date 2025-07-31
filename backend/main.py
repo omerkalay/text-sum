@@ -57,19 +57,19 @@ def summarize_text(text: str, target_length: int = 150) -> str:
         # Calculate text metrics
         text_word_count = len(text.split())
         
-        # Smart parameter calculation based on target and text length
+        # Simplified parameter calculation - more reliable for free tier
         if target_length == 100:  # Short
-            max_length = min(300, text_word_count // 3)  # Conservative for short
-            min_length = 60
-            length_penalty = 1.8
+            max_length = 250
+            min_length = 80
+            length_penalty = 1.0
         elif target_length == 150:  # Medium  
-            max_length = min(450, text_word_count // 2)  # Balanced
-            min_length = 100
-            length_penalty = 2.0
+            max_length = 350
+            min_length = 120
+            length_penalty = 1.2
         else:  # Long (200)
-            max_length = min(600, text_word_count // 1.5)  # More aggressive
-            min_length = 140
-            length_penalty = 2.2
+            max_length = 450
+            min_length = 160
+            length_penalty = 1.5
         
         # Ensure minimum bounds
         max_length = max(150, max_length)
@@ -79,12 +79,11 @@ def summarize_text(text: str, target_length: int = 150) -> str:
             "parameters": {
                 "max_length": max_length,
                 "min_length": min_length,
-                "do_sample": True,
+                "do_sample": False,  # More deterministic
                 "length_penalty": length_penalty,
-                "num_beams": 4,
+                "num_beams": 2,  # Reduced for free tier
                 "early_stopping": True,
-                "no_repeat_ngram_size": 3,
-                "temperature": 0.7
+                "no_repeat_ngram_size": 2  # Simplified
             }
         }
         
