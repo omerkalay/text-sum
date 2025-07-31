@@ -21,6 +21,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://omerkalay.github.io",  # GitHub Pages URL
+        "https://omerkalay.com",        # Custom domain
+        "https://www.omerkalay.com",    # Custom domain with www
     ],
     allow_credentials=True,
     allow_methods=["*"],
