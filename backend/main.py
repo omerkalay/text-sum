@@ -30,7 +30,10 @@ app.add_middleware(
 )
 
 # Hugging Face API configuration
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+# Using a better summarization model
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
+BART_API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+PEGASUS_API_URL = "https://api-inference.huggingface.co/models/google/pegasus-xsum"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "your_token_here")
 
 headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"}
@@ -66,7 +69,7 @@ def summarize_text(text: str, max_length: int = 150) -> str:
             }
         }
         
-        response = requests.post(HUGGINGFACE_API_URL, headers=headers, json=payload)
+        response = requests.post(PEGASUS_API_URL, headers=headers, json=payload)
         
         if response.status_code == 200:
             result = response.json()
