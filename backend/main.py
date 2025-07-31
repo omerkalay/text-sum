@@ -20,10 +20,7 @@ app = FastAPI(title="AI Text Summarizer", description="PDF and Text Summarizatio
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://omerkalay.github.io",  # Your GitHub Pages URL
-        "https://omerkalay.github.io/text-sum",  # Your repo specific URL
-        "http://localhost:3000",  # For local development
-        "http://127.0.0.1:5500",  # For VS Code Live Server
+        "https://omerkalay.github.io",  # GitHub Pages URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
