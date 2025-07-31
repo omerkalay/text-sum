@@ -52,12 +52,17 @@ def summarize_text(text: str, max_length: int = 150) -> str:
     """Summarize text using Hugging Face API"""
     try:
         # Prepare the request payload
+        # Dynamic min_length based on max_length for better consistency
+        min_length = min(30, max(10, max_length // 4))  # 25% of max_length, but at least 10
+        
         payload = {
             "inputs": text,
             "parameters": {
                 "max_length": max_length,
-                "min_length": 30,
-                "do_sample": False
+                "min_length": min_length,
+                "do_sample": False,
+                "length_penalty": 1.0,  # Encourage target length
+                "no_repeat_ngram_size": 3  # Avoid repetition
             }
         }
         
