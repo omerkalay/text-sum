@@ -266,14 +266,26 @@ async function submitSummary(formData, type) {
         });
         
         if (!response.ok) {
-            // Friendly messages for common upstream cases
+            // Try to surface server-provided detail
+            let serverMsg = '';
+            try {
+                const errData = await response.json();
+                serverMsg = errData?.detail || errData?.error || '';
+            } catch {}
+
             if (response.status === 429) {
-                throw new Error('Service is rate-limited. Please try again shortly.');
+                throw new Error(serverMsg || 'Service is rate-limited. Please try again shortly.');
             }
             if (response.status === 503) {
-                throw new Error('Model is warming up. Retrying in a moment may help.');
+                throw new Error(serverMsg || 'Model is warming up. Retrying in a moment may help.');
             }
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.status === 403) {
+                throw new Error(serverMsg || 'Transcripts are disabled for this video. Try a video with captions/transcript enabled.');
+            }
+            if (response.status === 404) {
+                throw new Error(serverMsg || 'No transcript found for this video. Try another URL or a video with captions.');
+            }
+            throw new Error(serverMsg || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();

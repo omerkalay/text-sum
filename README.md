@@ -54,6 +54,7 @@ Notes for free tiers:
 
 - The backend handles HF model warm-up (503) and rate limits (429) with user-friendly messages.
 - Very long texts are chunked and summarized in two passes to fit HF limits.
+- YouTube summarization requires the video to have captions/transcript enabled; otherwise you may see 403/404.
 ## 🔧 Quick Start
 
 1. **Clone the repository:**
