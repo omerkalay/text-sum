@@ -29,7 +29,7 @@ A modern web application that leverages AI to generate concise summaries from PD
 - **pdfplumber** - PDF text extraction
 - **Hugging Face API** - AI text summarization
 - **CORS & Security** - Production-ready configuration
- - **Optional Fallback** - yt-dlp + faster-whisper for local transcription when transcripts are unavailable
+- **Optional Fallback** - yt-dlp + faster-whisper for local transcription when transcripts are unavailable
 
 ### Deploy (Render + GitHub Pages)
 
@@ -37,11 +37,20 @@ Backend on Render (Free):
 
 1. Fork/clone repo → connect to Render as Web Service
 2. Use the provided `render.yaml` or set:
-   - Build Command: `pip install -r backend/requirements.txt`
-   - Start Command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - Env Var: `HUGGINGFACE_TOKEN` (set in dashboard)
+   - Build Command:
+     ```
+     pip install -r backend/requirements.txt
+     mkdir -p backend/bin
+     curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+     tar -xJf /tmp/ffmpeg.tar.xz -C backend/bin --strip-components=1
+     ```
+   - Start Command:
+     ```
+     PATH="$PATH:$(pwd)/backend/bin" cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+     ```
+   - Env Vars: `HUGGINGFACE_TOKEN`, `SUMMARY_MODEL` (optional), `MAX_YT_SECONDS` (optional)
    - Health Check Path: `/health`
-3. Region: choose closest (ex: `frankfurt`)
+3. If Whisper fallback is enabled, pin Python to 3.11 (prebuilt PyAV wheels). Either keep `runtime.txt` or set env `PYTHON_VERSION=3.11.9` in Render.
 
 Frontend on GitHub Pages:
 
@@ -56,7 +65,9 @@ Notes for free tiers:
 - The backend handles HF model warm-up (503) and rate limits (429) with user-friendly messages.
 - Very long texts are chunked and summarized in two passes to fit HF limits.
 - YouTube summarization requires the video to have captions/transcript enabled; otherwise you may see 403/404.
- - As a last resort, the backend can try yt-dlp + faster-whisper to transcribe audio. This may be slow on free CPU and can be restricted by platform TOS. Prefer user-provided `.srt/.vtt` when possible.
+- As a last resort, the backend can try yt-dlp + faster-whisper to transcribe audio. This may be slow on free CPU and can be restricted by platform TOS. Prefer user-provided `.srt/.vtt` when possible.
+- If builds fail on `av`/PyAV, ensure Python 3.11 is used and FFmpeg static is added as above.
+
 ## 🔧 Quick Start
 
 1. **Clone the repository:**
