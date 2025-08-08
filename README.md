@@ -29,7 +29,6 @@ A modern web application that leverages AI to generate concise summaries from PD
 - **pdfplumber** - PDF text extraction
 - **Hugging Face API** - AI text summarization
 - **CORS & Security** - Production-ready configuration
-- **Optional Fallback** - yt-dlp + faster-whisper for local transcription when transcripts are unavailable
 
 ### Deploy (Render + GitHub Pages)
 
@@ -37,20 +36,11 @@ Backend on Render (Free):
 
 1. Fork/clone repo → connect to Render as Web Service
 2. Use the provided `render.yaml` or set:
-   - Build Command:
-     ```
-     pip install -r backend/requirements.txt
-     mkdir -p backend/bin
-     curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
-     tar -xJf /tmp/ffmpeg.tar.xz -C backend/bin --strip-components=1
-     ```
-   - Start Command:
-     ```
-     PATH="$PATH:$(pwd)/backend/bin" cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
-     ```
-   - Env Vars: `HUGGINGFACE_TOKEN`, `SUMMARY_MODEL` (optional), `MAX_YT_SECONDS` (optional)
+   - Build Command: `pip install -r backend/requirements.txt`
+   - Start Command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - Env Vars: `HUGGINGFACE_TOKEN` (required), `SUMMARY_MODEL` (optional)
    - Health Check Path: `/health`
-3. No YouTube processing in free tier. Only PDF and Text summarization are supported for stability.
+
 
 Frontend on GitHub Pages:
 
@@ -64,9 +54,6 @@ Notes for free tiers:
 
 - The backend handles HF model warm-up (503) and rate limits (429) with user-friendly messages.
 - Very long texts are chunked and summarized in two passes to fit HF limits.
-- YouTube summarization requires the video to have captions/transcript enabled; otherwise you may see 403/404.
-- As a last resort, the backend can try yt-dlp + faster-whisper to transcribe audio. This may be slow on free CPU and can be restricted by platform TOS. Prefer user-provided `.srt/.vtt` when possible.
-- If builds fail on `av`/PyAV, ensure Python 3.11 is used and FFmpeg static is added as above.
 
 ## 🔧 Quick Start
 
