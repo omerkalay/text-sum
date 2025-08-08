@@ -37,6 +37,7 @@ app.add_middleware(
 BART_MODEL = os.getenv("SUMMARY_MODEL", "facebook/bart-large-cnn")
 BART_API_URL = f"https://api-inference.huggingface.co/models/{BART_MODEL}"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "").strip()
+YTDLP_COOKIES_B64 = os.getenv("YTDLP_COOKIES_B64", "").strip()
 try:
     MAX_YT_SECONDS = int(os.getenv("MAX_YT_SECONDS", "480"))  # default 8 minutes
 except Exception:
@@ -368,25 +369,30 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
             transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=preferred_langs)
         except (TranscriptsDisabled, NoTranscriptFound):
             # 2) Inspect transcript list and try translations/generic fallbacks
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             fetched = None
-            # Try any manual transcript in any language
             try:
-                t = transcript_list.find_transcript(preferred_langs)
-                fetched = t.fetch()
-            except Exception:
-                # Try generated
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                # Try any manual transcript in any language
                 try:
-                    t = transcript_list.find_generated_transcript(preferred_langs)
+                    t = transcript_list.find_transcript(preferred_langs)
                     fetched = t.fetch()
                 except Exception:
-                    # Try first available transcript then translate to English
-                    for t in transcript_list:
-                        try:
-                            fetched = t.translate("en").fetch()
-                            break
-                        except Exception:
-                            continue
+                    # Try generated
+                    try:
+                        t = transcript_list.find_generated_transcript(preferred_langs)
+                        fetched = t.fetch()
+                    except Exception:
+                        # Try first available transcript then translate to English
+                        for t in transcript_list:
+                            try:
+                                fetched = t.translate("en").fetch()
+                                break
+                            except Exception:
+                                continue
+            except (TranscriptsDisabled, NoTranscriptFound, Exception):
+                # list_transcripts itself failed; proceed to fallbacks
+                fetched = None
+
             if not fetched:
                 # 3) Timedtext public endpoint fallback
                 text = _fetch_transcript_via_timedtext(video_id, preferred_langs)
@@ -401,8 +407,9 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
                         "original_length": len(text.split()),
                         "summary_length": len(summary.split()),
                         "video_id": video_id,
-                        "source": "whisper" if "yt-dlp" in text.lower() else "timedtext_or_manual",
+                        "source": "whisper" if text and len(text) > 0 and "yt-dlp" in "".lower() else "timedtext_or_manual",
                     }
+                # If still nothing, bubble up to outer handler (403/404)
                 raise
             transcript = fetched
 
@@ -516,6 +523,52 @@ def _fetch_transcript_via_timedtext(video_id: str, preferred_langs: List[str]) -
     return None
 
 
+def _try_download_audio_via_piped(video_url: str, tmpdir: str) -> Optional[str]:
+    """Attempt to download audio using public Piped API (best-effort, no cookies).
+    Returns local file path or None.
+    """
+    try:
+        video_id = _extract_youtube_video_id(video_url) or ""
+        if not video_id:
+            return None
+        piped_instances = [
+            "https://piped.video",
+            "https://pipedapi.kavin.rocks",
+            "https://piped.projectsegfau.lt",
+        ]
+        headers_local = {"User-Agent": "Mozilla/5.0"}
+        for base in piped_instances:
+            try:
+                resp = requests.get(f"{base}/api/v1/streams/{video_id}", timeout=12, headers=headers_local)
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                audio_streams = data.get("audioStreams") or []
+                if not audio_streams:
+                    continue
+                # Pick highest bitrate
+                audio_streams.sort(key=lambda s: s.get("bitrate", 0), reverse=True)
+                for s in audio_streams:
+                    stream_url = s.get("url")
+                    if not stream_url:
+                        continue
+                    local_path = os.path.join(tmpdir, "audio.webm")
+                    with requests.get(stream_url, timeout=30, headers=headers_local, stream=True) as r:
+                        if r.status_code != 200:
+                            continue
+                        with open(local_path, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                        return local_path
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
 def _download_audio_and_whisper(url: str, whisper_model: str = "small") -> Optional[str]:
     """Download audio via yt-dlp and transcribe with faster-whisper as a last resort.
     Uses low-resource settings to stay in free-tier limits but may still be heavy on CPU.
@@ -527,26 +580,44 @@ def _download_audio_and_whisper(url: str, whisper_model: str = "small") -> Optio
         import shutil
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Download best audio
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": f"{tmpdir}/audio.%(ext)s",
-                "quiet": True,
-                "no_warnings": True,
-                "restrictfilenames": True,
-                "noplaylist": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                audio_path = ydl.prepare_filename(info)
-                # Ensure extension
-                if not os.path.exists(audio_path):
-                    # Try common extensions
-                    for ext in ("m4a", "webm", "mp3", "opus"):
-                        p = os.path.join(tmpdir, f"audio.{ext}")
-                        if os.path.exists(p):
-                            audio_path = p
-                            break
+            # First try Piped API (no cookies, best-effort)
+            audio_path = _try_download_audio_via_piped(url, tmpdir)
+            cookie_path = None
+            if YTDLP_COOKIES_B64:
+                try:
+                    import base64
+                    cookie_path = os.path.join(tmpdir, "cookies.txt")
+                    with open(cookie_path, "wb") as f:
+                        f.write(base64.b64decode(YTDLP_COOKIES_B64))
+                except Exception:
+                    cookie_path = None
+            if not audio_path:
+                # Download best audio with yt-dlp as fallback
+                ydl_opts = {
+                    "format": "bestaudio/best",
+                    "outtmpl": f"{tmpdir}/audio.%(ext)s",
+                    "quiet": True,
+                    "no_warnings": True,
+                    "restrictfilenames": True,
+                    "noplaylist": True,
+                    "cookiefile": cookie_path,
+                    "extractor_args": {"youtube": {"player_client": ["android", "tv_embedded"]}},
+                    "geo_bypass": True,
+                    "retries": 2,
+                    "fragment_retries": 2,
+                    "force_ipv4": True,
+                    "http_headers": {"User-Agent": "Mozilla/5.0"},
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    audio_path = ydl.prepare_filename(info)
+                    # Ensure extension
+                    if not os.path.exists(audio_path):
+                        for ext in ("m4a", "webm", "mp3", "opus"):
+                            p = os.path.join(tmpdir, f"audio.{ext}")
+                            if os.path.exists(p):
+                                audio_path = p
+                                break
 
             # Load Whisper model (CPU)
             model = WhisperModel(whisper_model, device="cpu", compute_type="int8")
