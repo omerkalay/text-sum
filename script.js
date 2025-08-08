@@ -279,6 +279,9 @@ async function submitSummary(formData, type) {
             if (response.status === 503) {
                 throw new Error(serverMsg || 'Model is warming up. Retrying in a moment may help.');
             }
+            if (response.status === 413) {
+                throw new Error(serverMsg || 'Video is too long for free tier.');
+            }
             if (response.status === 403) {
                 throw new Error(serverMsg || 'Transcripts are disabled for this video. Try a video with captions/transcript enabled.');
             }

@@ -29,6 +29,7 @@ A modern web application that leverages AI to generate concise summaries from PD
 - **pdfplumber** - PDF text extraction
 - **Hugging Face API** - AI text summarization
 - **CORS & Security** - Production-ready configuration
+ - **Optional Fallback** - yt-dlp + faster-whisper for local transcription when transcripts are unavailable
 
 ### Deploy (Render + GitHub Pages)
 
@@ -55,6 +56,7 @@ Notes for free tiers:
 - The backend handles HF model warm-up (503) and rate limits (429) with user-friendly messages.
 - Very long texts are chunked and summarized in two passes to fit HF limits.
 - YouTube summarization requires the video to have captions/transcript enabled; otherwise you may see 403/404.
+ - As a last resort, the backend can try yt-dlp + faster-whisper to transcribe audio. This may be slow on free CPU and can be restricted by platform TOS. Prefer user-provided `.srt/.vtt` when possible.
 ## 🔧 Quick Start
 
 1. **Clone the repository:**
@@ -82,6 +84,7 @@ python main.py
 - `POST /summarize-pdf` - Upload and summarize PDF files
 - `POST /summarize-text` - Summarize text input with intelligent length control
 - `POST /summarize-youtube` - Summarize YouTube video via transcript (no YouTube API key required)
+  - Free tier limit: up to 8 minutes per video (configurable via `MAX_YT_SECONDS`)
 - `GET /health` - API health check
 
 ## 🧠 Advanced AI Features

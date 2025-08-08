@@ -172,6 +172,7 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
+    overflow-x: hidden;
 }
 
 /* Hero Section */
@@ -338,6 +339,8 @@ body {
 
 .file-upload-area input[type="file"] {
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     opacity: 0;
@@ -355,6 +358,7 @@ body {
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-md);
+    cursor: pointer;
 }
 
 .upload-placeholder:hover {

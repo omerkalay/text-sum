@@ -88,12 +88,12 @@
                         </div>
                         <form id="pdf-form" enctype="multipart/form-data">
                             <div class="file-upload-area" id="file-upload-area">
-                                <input type="file" id="pdf-file" name="file" accept=".pdf" required>
-                                <div class="upload-placeholder">
+                                <input type="file" id="pdf-file" name="file" accept=".pdf" required aria-label="Choose PDF file">
+                                <label for="pdf-file" class="upload-placeholder">
                                     <i class="fas fa-file-pdf"></i>
                                     <span>Choose PDF file</span>
                                     <small>or drag and drop here</small>
-                                </div>
+                                </label>
                             </div>
                             <button type="submit" class="submit-btn">
                                 <i class="fas fa-magic"></i>
@@ -151,6 +151,10 @@
                                     <option value="200">Long</option>
                                 </select>
                             </div>
+                        </div>
+                        <div class="warning-message info">
+                            <i class="fas fa-info-circle"></i>
+                            <span><strong>Note:</strong> Free tier supports videos up to <span id="yt-max-seconds">8 minutes</span>. Longer videos may be rejected.</span>
                         </div>
                         <form id="youtube-form">
                             <div class="textarea-container">

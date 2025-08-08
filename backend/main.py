@@ -37,6 +37,10 @@ app.add_middleware(
 BART_MODEL = os.getenv("SUMMARY_MODEL", "facebook/bart-large-cnn")
 BART_API_URL = f"https://api-inference.huggingface.co/models/{BART_MODEL}"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "").strip()
+try:
+    MAX_YT_SECONDS = int(os.getenv("MAX_YT_SECONDS", "480"))  # default 8 minutes
+except Exception:
+    MAX_YT_SECONDS = 480
 
 headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"} if HUGGINGFACE_TOKEN else {}
 
@@ -324,6 +328,25 @@ def _extract_youtube_video_id(url: str) -> Optional[str]:
         return None
 
 
+def _get_youtube_duration_seconds(url: str) -> Optional[int]:
+    """Return video duration in seconds using yt-dlp metadata without downloading audio."""
+    try:
+        import yt_dlp  # type: ignore
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            dur = info.get("duration")
+            if isinstance(dur, (int, float)):
+                return int(dur)
+    except Exception:
+        return None
+    return None
+
+
 @app.post("/summarize-youtube")
 async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
     """Summarize a YouTube video by fetching its transcript (no YouTube API key required)."""
@@ -335,6 +358,10 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
     try:
+        # Enforce maximum duration for free tier
+        duration = _get_youtube_duration_seconds(url)
+        if duration and duration > MAX_YT_SECONDS:
+            raise HTTPException(status_code=413, detail=f"Video too long for free tier. Max {MAX_YT_SECONDS} seconds.")
         preferred_langs = ["tr", "tr-TR", "en", "en-US", "en-GB"]
         # 1) Try direct helper first (works for both generated and manual when available)
         try:
@@ -364,16 +391,19 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
                 # 3) Timedtext public endpoint fallback
                 text = _fetch_transcript_via_timedtext(video_id, preferred_langs)
                 if not text:
-                    raise
-                # Directly summarize from text
-                summary = summarize_text(text, max_length)
-                return {
-                    "original_text": text,
-                    "summary": summary,
-                    "original_length": len(text.split()),
-                    "summary_length": len(summary.split()),
-                    "video_id": video_id,
-                }
+                    # 4) Fallback to yt-dlp + Whisper local transcription (last resort)
+                    text = _download_audio_and_whisper(url)
+                if text:
+                    summary = summarize_text(text, max_length)
+                    return {
+                        "original_text": text,
+                        "summary": summary,
+                        "original_length": len(text.split()),
+                        "summary_length": len(summary.split()),
+                        "video_id": video_id,
+                        "source": "whisper" if "yt-dlp" in text.lower() else "timedtext_or_manual",
+                    }
+                raise
             transcript = fetched
 
         text = " ".join(item.get("text", "") for item in transcript if item.get("text"))
@@ -484,6 +514,51 @@ def _fetch_transcript_via_timedtext(video_id: str, preferred_langs: List[str]) -
         except Exception:
             continue
     return None
+
+
+def _download_audio_and_whisper(url: str, whisper_model: str = "small") -> Optional[str]:
+    """Download audio via yt-dlp and transcribe with faster-whisper as a last resort.
+    Uses low-resource settings to stay in free-tier limits but may still be heavy on CPU.
+    """
+    try:
+        import yt_dlp  # type: ignore
+        from faster_whisper import WhisperModel  # type: ignore
+        import tempfile
+        import shutil
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Download best audio
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": f"{tmpdir}/audio.%(ext)s",
+                "quiet": True,
+                "no_warnings": True,
+                "restrictfilenames": True,
+                "noplaylist": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                audio_path = ydl.prepare_filename(info)
+                # Ensure extension
+                if not os.path.exists(audio_path):
+                    # Try common extensions
+                    for ext in ("m4a", "webm", "mp3", "opus"):
+                        p = os.path.join(tmpdir, f"audio.{ext}")
+                        if os.path.exists(p):
+                            audio_path = p
+                            break
+
+            # Load Whisper model (CPU)
+            model = WhisperModel(whisper_model, device="cpu", compute_type="int8")
+            segments, _ = model.transcribe(audio_path, language=None, vad_filter=True)
+            text_parts: List[str] = []
+            for seg in segments:
+                if seg.text:
+                    text_parts.append(seg.text.strip())
+            text = " ".join(text_parts).strip()
+            return text or None
+    except Exception:
+        return None
 
 @app.get("/health")
 async def health_check():
