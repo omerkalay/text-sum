@@ -8,6 +8,7 @@ from typing import Optional, List
 import time
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from urllib.parse import urlparse, parse_qs
 
 # Load environment variables
 try:
@@ -302,14 +303,21 @@ async def summarize_text_endpoint(
 
 
 def _extract_youtube_video_id(url: str) -> Optional[str]:
+    """Robustly extract the YouTube video ID from common URL formats."""
     try:
-        # Support youtu.be/<id>, youtube.com/watch?v=<id>, and variants
-        if "youtu.be/" in url:
-            return url.split("youtu.be/")[-1].split("?")[0]
-        if "watch?v=" in url:
-            return url.split("watch?v=")[-1].split("&")[0]
-        if "/shorts/" in url:
-            return url.split("/shorts/")[-1].split("?")[0]
+        parsed = urlparse(url)
+        # youtu.be/<id>
+        if parsed.netloc.endswith("youtu.be"):
+            vid = parsed.path.lstrip("/")
+            return vid.split("/")[0] if vid else None
+        # youtube.com/watch?v=<id>
+        if "youtube" in parsed.netloc and parsed.path == "/watch":
+            qs = parse_qs(parsed.query)
+            vid = qs.get("v", [None])[0]
+            return vid
+        # youtube.com/shorts/<id>
+        if "youtube" in parsed.netloc and parsed.path.startswith("/shorts/"):
+            return parsed.path.split("/shorts/")[-1].split("/")[0]
         return None
     except Exception:
         return None
@@ -326,19 +334,34 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
     try:
-        # Try Turkish or English first, then any
-        preferred_langs = ["tr", "en"]
+        preferred_langs = ["tr", "tr-TR", "en", "en-US", "en-GB"]
+        # 1) Try direct helper first (works for both generated and manual when available)
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            for lang in preferred_langs:
-                if transcript_list.find_transcript([lang]):
-                    transcript = transcript_list.find_transcript([lang]).fetch()
-                    break
-            else:
-                transcript = transcript_list.find_transcript(transcript_list._manually_created_transcripts.keys() or ["en"]).fetch()
-        except Exception:
-            # Fallback to API convenience method
             transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=preferred_langs)
+        except (TranscriptsDisabled, NoTranscriptFound):
+            # 2) Inspect transcript list and try translations/generic fallbacks
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            fetched = None
+            # Try any manual transcript in any language
+            try:
+                t = transcript_list.find_transcript(preferred_langs)
+                fetched = t.fetch()
+            except Exception:
+                # Try generated
+                try:
+                    t = transcript_list.find_generated_transcript(preferred_langs)
+                    fetched = t.fetch()
+                except Exception:
+                    # Try first available transcript then translate to English
+                    for t in transcript_list:
+                        try:
+                            fetched = t.translate("en").fetch()
+                            break
+                        except Exception:
+                            continue
+            if not fetched:
+                raise
+            transcript = fetched
 
         text = " ".join(item.get("text", "") for item in transcript if item.get("text"))
         text = text.strip()
