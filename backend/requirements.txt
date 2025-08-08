@@ -7,3 +7,4 @@ python-dotenv==1.0.0
 youtube-transcript-api==0.6.2
 yt-dlp==2025.01.12
 faster-whisper==1.0.3
+av==12.3.0

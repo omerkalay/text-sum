@@ -3,11 +3,17 @@ services:
     name: text-sum-api
     env: python
     region: frankfurt
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: |
+      pip install -r backend/requirements.txt
+      mkdir -p backend/bin
+      curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+      tar -xJf /tmp/ffmpeg.tar.xz -C backend/bin --strip-components=1
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: HUGGINGFACE_TOKEN
         value: your_token_here # Set this in Render.com dashboard
       - key: SUMMARY_MODEL
         value: facebook/bart-large-cnn
+      - key: MAX_YT_SECONDS
+        value: 480
     healthCheckPath: /health
