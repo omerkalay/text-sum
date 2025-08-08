@@ -7,6 +7,7 @@ import os
 from typing import Optional, List
 import time
 from dotenv import load_dotenv
+import xml.etree.ElementTree as ET
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 from urllib.parse import urlparse, parse_qs
 
@@ -360,7 +361,19 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
                         except Exception:
                             continue
             if not fetched:
-                raise
+                # 3) Timedtext public endpoint fallback
+                text = _fetch_transcript_via_timedtext(video_id, preferred_langs)
+                if not text:
+                    raise
+                # Directly summarize from text
+                summary = summarize_text(text, max_length)
+                return {
+                    "original_text": text,
+                    "summary": summary,
+                    "original_length": len(text.split()),
+                    "summary_length": len(summary.split()),
+                    "video_id": video_id,
+                }
             transcript = fetched
 
         text = " ".join(item.get("text", "") for item in transcript if item.get("text"))
@@ -383,6 +396,94 @@ async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
         raise HTTPException(status_code=404, detail="No transcript found for this video")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"YouTube transcript error: {str(e)}")
+
+
+def _fetch_transcript_via_timedtext(video_id: str, preferred_langs: List[str]) -> Optional[str]:
+    """Attempt to fetch transcript via the public timedtext endpoint as a last resort.
+    This can sometimes work when the library reports TranscriptsDisabled.
+    """
+    list_urls = [
+        f"https://video.google.com/timedtext?type=list&v={video_id}",
+        f"https://youtubetranslate.googleapis.com/timedtext?type=list&v={video_id}",
+    ]
+    tracks: List[dict] = []
+    for url in list_urls:
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200 and r.text:
+                try:
+                    root = ET.fromstring(r.text)
+                    for t in root.findall('track'):
+                        tracks.append({
+                            'lang_code': t.attrib.get('lang_code'),
+                            'kind': t.attrib.get('kind'),
+                            'name': t.attrib.get('name'),
+                        })
+                except Exception:
+                    pass
+        except Exception:
+            continue
+
+    # Choose language
+    chosen_lang: Optional[str] = None
+    if tracks:
+        for lang in preferred_langs:
+            if any(t.get('lang_code') == lang for t in tracks):
+                chosen_lang = lang
+                break
+        if not chosen_lang:
+            # Prefer English or Turkish ASR if available
+            for lang in ("en", "tr"):
+                if any((t.get('lang_code') == lang and t.get('kind') == 'asr') for t in tracks):
+                    chosen_lang = lang
+                    break
+        if not chosen_lang:
+            chosen_lang = tracks[0].get('lang_code')
+
+    if not chosen_lang:
+        return None
+
+    data_urls = [
+        f"https://video.google.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=json3",
+        f"https://youtubetranslate.googleapis.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=json3",
+        f"https://video.google.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=vtt",
+    ]
+
+    for url in data_urls:
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                continue
+            # json3 format
+            if 'json3' in url:
+                try:
+                    j = r.json()
+                except Exception:
+                    continue
+                texts: List[str] = []
+                for ev in j.get('events', []):
+                    for seg in ev.get('segs', []) or []:
+                        txt = seg.get('utf8', '')
+                        if txt:
+                            texts.append(txt)
+                transcript_text = " ".join(texts).strip()
+                if transcript_text:
+                    return transcript_text
+            else:
+                # VTT text fallback
+                lines = []
+                for line in r.text.splitlines():
+                    if not line.strip():
+                        continue
+                    if line.startswith('WEBVTT') or '-->' in line:
+                        continue
+                    lines.append(line.strip())
+                transcript_text = " ".join(lines).strip()
+                if transcript_text:
+                    return transcript_text
+        except Exception:
+            continue
+    return None
 
 @app.get("/health")
 async def health_check():
