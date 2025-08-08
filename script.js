@@ -1,10 +1,22 @@
 // AI Summarizer - Modern JavaScript
 
-const API_BASE_URL = 'https://text-sum-7t11.onrender.com'; // Your actual backend URL
+// Backend URL discovery: allow override via ?api=... or localStorage, fallback to default Render URL
+const DEFAULT_API_BASE_URL = 'https://text-sum-7t11.onrender.com';
+function getApiBaseUrl() {
+    const urlParam = new URLSearchParams(window.location.search).get('api');
+    const stored = localStorage.getItem('apiBaseUrl');
+    const candidate = urlParam || stored || DEFAULT_API_BASE_URL;
+    return candidate.replace(/\/$/, '');
+}
+function setApiBaseUrl(url) {
+    if (url) localStorage.setItem('apiBaseUrl', url.replace(/\/$/, ''));
+}
+let API_BASE_URL = getApiBaseUrl();
 
 // DOM Elements
 const pdfForm = document.getElementById('pdf-form');
 const textForm = document.getElementById('text-form');
+const youtubeForm = document.getElementById('youtube-form');
 const loadingOverlay = document.getElementById('loading');
 const resultSection = document.getElementById('result');
 const summaryText = document.getElementById('summary-text');
@@ -36,12 +48,16 @@ function initializeApp() {
     
     // Check for saved theme preference
     loadThemePreference();
+
+    // Optionally probe API health, and notify if unreachable
+    probeApiHealth();
 }
 
 function setupEventListeners() {
     // Form submissions
     pdfForm.addEventListener('submit', handlePdfSubmit);
     textForm.addEventListener('submit', handleTextSubmit);
+    if (youtubeForm) youtubeForm.addEventListener('submit', handleYoutubeSubmit);
     
     // Character counter
     inputText.addEventListener('input', updateCharCount);
@@ -137,12 +153,14 @@ function updateCharCount() {
 }
 
 // Tab switching
-function switchTab(tabName) {
+function switchTab(tabName, btnEl) {
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.closest('.tab-btn').classList.add('active');
+    if (btnEl) {
+        btnEl.classList.add('active');
+    }
     
     // Update tab content
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -220,17 +238,41 @@ async function handleTextSubmit(e) {
     await submitSummary(formData, 'text');
 }
 
+async function handleYoutubeSubmit(e) {
+    e.preventDefault();
+    const url = document.getElementById('youtube-url').value.trim();
+    const maxLength = document.getElementById('yt-max-length').value;
+    if (!url) {
+        showNotification('Please enter a YouTube URL', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('url', url);
+    formData.append('max_length', maxLength);
+    await submitSummary(formData, 'youtube');
+}
+
 async function submitSummary(formData, type) {
     try {
         showLoading(true);
         
-        const endpoint = type === 'pdf' ? '/summarize-pdf' : '/summarize-text';
+        let endpoint = '/summarize-text';
+        if (type === 'pdf') endpoint = '/summarize-pdf';
+        else if (type === 'youtube') endpoint = '/summarize-youtube';
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             body: formData
         });
         
         if (!response.ok) {
+            // Friendly messages for common upstream cases
+            if (response.status === 429) {
+                throw new Error('Service is rate-limited. Please try again shortly.');
+            }
+            if (response.status === 503) {
+                throw new Error('Model is warming up. Retrying in a moment may help.');
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -488,3 +530,16 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style); 
+
+// Health-check and small utilities
+async function probeApiHealth() {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('Unhealthy');
+    } catch (e) {
+        showNotification('Backend not reachable. Check the API URL from settings (?api=YOUR_URL).', 'warning');
+    }
+}

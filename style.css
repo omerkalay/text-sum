@@ -485,6 +485,36 @@ body {
     color: var(--text-muted);
 }
 
+/* Text inputs (e.g., YouTube URL) */
+.text-card input[type="text"],
+.text-card input[type="url"],
+#youtube-url {
+    width: 100%;
+    height: 48px;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: 0 var(--spacing-lg);
+    color: var(--text-primary);
+    font-size: 16px;
+    transition: var(--transition-normal);
+    font-family: inherit;
+}
+
+.text-card input[type="text"]:focus,
+.text-card input[type="url"]:focus,
+#youtube-url:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+.text-card input[type="text"]::placeholder,
+.text-card input[type="url"]::placeholder,
+#youtube-url::placeholder {
+    color: var(--text-muted);
+}
+
 .textarea-footer {
     position: absolute;
     bottom: var(--spacing-md);

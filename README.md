@@ -30,6 +30,30 @@ A modern web application that leverages AI to generate concise summaries from PD
 - **Hugging Face API** - AI text summarization
 - **CORS & Security** - Production-ready configuration
 
+### Deploy (Render + GitHub Pages)
+
+Backend on Render (Free):
+
+1. Fork/clone repo → connect to Render as Web Service
+2. Use the provided `render.yaml` or set:
+   - Build Command: `pip install -r backend/requirements.txt`
+   - Start Command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - Env Var: `HUGGINGFACE_TOKEN` (set in dashboard)
+   - Health Check Path: `/health`
+3. Region: choose closest (ex: `frankfurt`)
+
+Frontend on GitHub Pages:
+
+1. Enable Pages for this repo (root → `index.html`, `script.js`, `style.css`)
+2. The app defaults to `https://text-sum-7t11.onrender.com` as backend
+3. Override API at runtime if needed:
+   - Query param: `?api=https://your-service.onrender.com`
+   - Or persist: open console → `localStorage.setItem('apiBaseUrl','https://...')`
+
+Notes for free tiers:
+
+- The backend handles HF model warm-up (503) and rate limits (429) with user-friendly messages.
+- Very long texts are chunked and summarized in two passes to fit HF limits.
 ## 🔧 Quick Start
 
 1. **Clone the repository:**
@@ -56,6 +80,7 @@ python main.py
 
 - `POST /summarize-pdf` - Upload and summarize PDF files
 - `POST /summarize-text` - Summarize text input with intelligent length control
+- `POST /summarize-youtube` - Summarize YouTube video via transcript (no YouTube API key required)
 - `GET /health` - API health check
 
 ## 🧠 Advanced AI Features

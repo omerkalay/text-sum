@@ -8,4 +8,6 @@ services:
     envVars:
       - key: HUGGINGFACE_TOKEN
         value: your_token_here # Set this in Render.com dashboard
+      - key: SUMMARY_MODEL
+        value: facebook/bart-large-cnn
     healthCheckPath: /health

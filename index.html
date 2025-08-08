@@ -55,13 +55,17 @@
             <!-- Tabs Navigation -->
             <div class="tabs-container">
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('pdf')">
+                    <button class="tab-btn active" onclick="switchTab('pdf', this)">
                         <i class="fas fa-file-pdf"></i>
                         <span>PDF Upload</span>
                     </button>
-                    <button class="tab-btn" onclick="switchTab('text')">
+                    <button class="tab-btn" onclick="switchTab('text', this)">
                         <i class="fas fa-keyboard"></i>
                         <span>Text Input</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('youtube', this)">
+                        <i class="fab fa-youtube"></i>
+                        <span>YouTube URL</span>
                     </button>
                 </div>
             </div>
@@ -125,6 +129,32 @@
                                 <div class="textarea-footer">
                                     <span class="char-count">0 characters</span>
                                 </div>
+                            </div>
+                            <button type="submit" class="submit-btn">
+                                <i class="fas fa-magic"></i>
+                                <span>Generate Summary</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- YouTube Tab -->
+                <div id="youtube-tab" class="tab-content">
+                    <div class="text-card">
+                        <div class="text-header">
+                            <h3>Enter YouTube URL</h3>
+                            <div class="text-options">
+                                <label for="yt-max-length">Summary Length:</label>
+                                <select id="yt-max-length" name="max_length">
+                                    <option value="100">Short</option>
+                                    <option value="150" selected>Medium</option>
+                                    <option value="200">Long</option>
+                                </select>
+                            </div>
+                        </div>
+                        <form id="youtube-form">
+                            <div class="textarea-container">
+                                <input id="youtube-url" name="url" placeholder="https://www.youtube.com/watch?v=..."/>
                             </div>
                             <button type="submit" class="submit-btn">
                                 <i class="fas fa-magic"></i>
