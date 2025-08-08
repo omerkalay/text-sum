@@ -6,8 +6,6 @@ import pdfplumber
 import os
 from typing import Optional, List
 import time
-import base64
-import random
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -38,7 +36,7 @@ BART_API_URL = f"https://api-inference.huggingface.co/models/{BART_MODEL}"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "").strip()
 
 headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"} if HUGGINGFACE_TOKEN else {}
-# YouTube functionality removed in free tier: cookies, duration check, and audio download helpers deleted.
+# YouTube functionality removed in free tier: all related code paths were removed.
 
 
 def extract_text_from_pdf(pdf_file: UploadFile) -> str:
@@ -119,6 +117,13 @@ def _chunk_text_by_words(text: str, max_words_per_chunk: int) -> List[str]:
     return chunks
 
 
+def _clean_pdf_artifacts(text: str) -> str:
+    # Merge hyphenated line breaks and normalize spaces
+    text = text.replace("-\n", "").replace("\r", "\n")
+    text = text.replace("\n", " ")
+    return " ".join(text.split())
+
+
 def summarize_text(text: str, target_length: int = 150) -> str:
     """Summarize text using Hugging Face API.
 
@@ -131,6 +136,9 @@ def summarize_text(text: str, target_length: int = 150) -> str:
         text = (text or "").strip()
         if not text:
             raise HTTPException(status_code=400, detail="Empty text")
+
+        # Clean artifacts
+        text = _clean_pdf_artifacts(text)
 
         # Parameter presets
         if target_length == 100:  # Short
@@ -165,7 +173,7 @@ def summarize_text(text: str, target_length: int = 150) -> str:
             for chunk in chunks:
                 partial = _call_hf_with_retry(chunk, params)
                 partial_summaries.append(partial)
-            combined = "\n".join(partial_summaries)
+            combined = " ".join(partial_summaries)
             # Second pass, target roughly requested length
             second_pass_params = {
                 "max_length": max_length,
@@ -301,347 +309,7 @@ async def summarize_text_endpoint(
         "original_length": len(text.split()),
         "summary_length": len(summary.split())
     }
-
-
-def _extract_youtube_video_id(url: str) -> Optional[str]:
-    """Robustly extract the YouTube video ID from common URL formats."""
-    try:
-        parsed = urlparse(url)
-        # youtu.be/<id>
-        if parsed.netloc.endswith("youtu.be"):
-            vid = parsed.path.lstrip("/")
-            return vid.split("/")[0] if vid else None
-        # youtube.com/watch?v=<id>
-        if "youtube" in parsed.netloc and parsed.path == "/watch":
-            qs = parse_qs(parsed.query)
-            vid = qs.get("v", [None])[0]
-            return vid
-        # youtube.com/shorts/<id>
-        if "youtube" in parsed.netloc and parsed.path.startswith("/shorts/"):
-            return parsed.path.split("/shorts/")[-1].split("/")[0]
-        return None
-    except Exception:
-        return None
-
-
-def _get_youtube_duration_seconds(url: str) -> Optional[int]:
-    """Return video duration in seconds using yt-dlp metadata without downloading audio.
-    Uses cookies if provided via YTDLP_COOKIES_B64.
-    """
-    try:
-        import yt_dlp  # type: ignore
-        import tempfile
-        cookiefile = None
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cookiefile = _resolve_cookiefile_path(tmpdir)
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "skip_download": True,
-                "cookiefile": cookiefile,
-                "extractor_args": {"youtube": {"player_client": ["android", "tv_embedded"]}},
-                "geo_bypass": True,
-                "http_headers": {"User-Agent": "Mozilla/5.0"},
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                dur = info.get("duration")
-                if isinstance(dur, (int, float)):
-                    return int(dur)
-    except Exception:
-        return None
-    return None
-
-
-@app.post("/summarize-youtube")
-async def summarize_youtube(url: str = Form(...), max_length: int = Form(150)):
-    """Summarize a YouTube video by fetching its transcript (no YouTube API key required)."""
-    if not url or not url.strip():
-        raise HTTPException(status_code=400, detail="URL cannot be empty")
-
-    video_id = _extract_youtube_video_id(url)
-    if not video_id:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
-
-    try:
-        # Enforce maximum duration for free tier
-        duration = _get_youtube_duration_seconds(url)
-        if duration and duration > MAX_YT_SECONDS:
-            raise HTTPException(status_code=413, detail=f"Video too long for free tier. Max {MAX_YT_SECONDS} seconds.")
-        preferred_langs = ["tr", "tr-TR", "en", "en-US", "en-GB"]
-        # 1) Try direct helper first (works for both generated and manual when available)
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=preferred_langs)
-        except (TranscriptsDisabled, NoTranscriptFound):
-            # 2) Inspect transcript list and try translations/generic fallbacks
-            fetched = None
-            try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                # Try any manual transcript in any language
-                try:
-                    t = transcript_list.find_transcript(preferred_langs)
-                    fetched = t.fetch()
-                except Exception:
-                    # Try generated
-                    try:
-                        t = transcript_list.find_generated_transcript(preferred_langs)
-                        fetched = t.fetch()
-                    except Exception:
-                        # Try first available transcript then translate to English
-                        for t in transcript_list:
-                            try:
-                                fetched = t.translate("en").fetch()
-                                break
-                            except Exception:
-                                continue
-            except (TranscriptsDisabled, NoTranscriptFound, Exception):
-                # list_transcripts itself failed; proceed to fallbacks
-                fetched = None
-
-            if not fetched:
-                # 3) Timedtext public endpoint fallback
-                text = _fetch_transcript_via_timedtext(video_id, preferred_langs)
-                if not text:
-                    # 4) Fallback to yt-dlp + Whisper local transcription (last resort)
-                    text = _download_audio_and_whisper(url)
-                if text:
-                    summary = summarize_text(text, max_length)
-                    return {
-                        "original_text": text,
-                        "summary": summary,
-                        "original_length": len(text.split()),
-                        "summary_length": len(summary.split()),
-                        "video_id": video_id,
-                        "source": "whisper" if text and len(text) > 0 and "yt-dlp" in "".lower() else "timedtext_or_manual",
-                    }
-                # If still nothing, bubble up to outer handler (403/404)
-                raise
-            transcript = fetched
-
-        text = " ".join(item.get("text", "") for item in transcript if item.get("text"))
-        text = text.strip()
-        if not text:
-            raise HTTPException(status_code=404, detail="Transcript is empty")
-
-        summary = summarize_text(text, max_length)
-        return {
-            "original_text": text,
-            "summary": summary,
-            "original_length": len(text.split()),
-            "summary_length": len(summary.split()),
-            "video_id": video_id,
-        }
-
-    except TranscriptsDisabled:
-        raise HTTPException(status_code=403, detail="Transcripts are disabled for this video")
-    except NoTranscriptFound:
-        raise HTTPException(status_code=404, detail="No transcript found for this video")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"YouTube transcript error: {str(e)}")
-
-
-def _fetch_transcript_via_timedtext(video_id: str, preferred_langs: List[str]) -> Optional[str]:
-    """Attempt to fetch transcript via the public timedtext endpoint as a last resort.
-    This can sometimes work when the library reports TranscriptsDisabled.
-    """
-    list_urls = [
-        f"https://video.google.com/timedtext?type=list&v={video_id}",
-        f"https://youtubetranslate.googleapis.com/timedtext?type=list&v={video_id}",
-    ]
-    tracks: List[dict] = []
-    for url in list_urls:
-        try:
-            r = requests.get(url, timeout=10)
-            if r.status_code == 200 and r.text:
-                try:
-                    root = ET.fromstring(r.text)
-                    for t in root.findall('track'):
-                        tracks.append({
-                            'lang_code': t.attrib.get('lang_code'),
-                            'kind': t.attrib.get('kind'),
-                            'name': t.attrib.get('name'),
-                        })
-                except Exception:
-                    pass
-        except Exception:
-            continue
-
-    # Choose language
-    chosen_lang: Optional[str] = None
-    if tracks:
-        for lang in preferred_langs:
-            if any(t.get('lang_code') == lang for t in tracks):
-                chosen_lang = lang
-                break
-        if not chosen_lang:
-            # Prefer English or Turkish ASR if available
-            for lang in ("en", "tr"):
-                if any((t.get('lang_code') == lang and t.get('kind') == 'asr') for t in tracks):
-                    chosen_lang = lang
-                    break
-        if not chosen_lang:
-            chosen_lang = tracks[0].get('lang_code')
-
-    if not chosen_lang:
-        return None
-
-    data_urls = [
-        f"https://video.google.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=json3",
-        f"https://youtubetranslate.googleapis.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=json3",
-        f"https://video.google.com/timedtext?v={video_id}&lang={chosen_lang}&fmt=vtt",
-    ]
-
-    for url in data_urls:
-        try:
-            r = requests.get(url, timeout=10)
-            if r.status_code != 200:
-                continue
-            # json3 format
-            if 'json3' in url:
-                try:
-                    j = r.json()
-                except Exception:
-                    continue
-                texts: List[str] = []
-                for ev in j.get('events', []):
-                    for seg in ev.get('segs', []) or []:
-                        txt = seg.get('utf8', '')
-                        if txt:
-                            texts.append(txt)
-                transcript_text = " ".join(texts).strip()
-                if transcript_text:
-                    return transcript_text
-            else:
-                # VTT text fallback
-                lines = []
-                for line in r.text.splitlines():
-                    if not line.strip():
-                        continue
-                    if line.startswith('WEBVTT') or '-->' in line:
-                        continue
-                    lines.append(line.strip())
-                transcript_text = " ".join(lines).strip()
-                if transcript_text:
-                    return transcript_text
-        except Exception:
-            continue
-    return None
-
-
-def _try_download_audio_via_piped(video_url: str, tmpdir: str) -> Optional[str]:
-    """Attempt to download audio using public Piped API (best-effort, no cookies).
-    Returns local file path or None.
-    """
-    try:
-        video_id = _extract_youtube_video_id(video_url) or ""
-        if not video_id:
-            return None
-        default_instances = [
-            "https://piped.video",
-            "https://pipedapi.kavin.rocks",
-            "https://piped.projectsegfau.lt",
-            "https://piped.esmailelbob.xyz",
-            "https://piped.lunar.icu",
-            "https://piped.privacy.com.de",
-            "https://piped.darkness.services",
-        ]
-        piped_instances = (PIPED_API_BASES or []) + default_instances
-        # randomize to distribute load
-        random.shuffle(piped_instances)
-        headers_local = {"User-Agent": "Mozilla/5.0"}
-        for base in piped_instances:
-            try:
-                resp = requests.get(f"{base}/api/v1/streams/{video_id}", timeout=12, headers=headers_local)
-                if resp.status_code != 200:
-                    continue
-                data = resp.json()
-                audio_streams = data.get("audioStreams") or []
-                if not audio_streams:
-                    continue
-                # Pick highest bitrate
-                audio_streams.sort(key=lambda s: s.get("bitrate", 0), reverse=True)
-                for s in audio_streams:
-                    stream_url = s.get("url")
-                    if not stream_url:
-                        continue
-                    local_path = os.path.join(tmpdir, "audio.webm")
-                    with requests.get(stream_url, timeout=30, headers=headers_local, stream=True) as r:
-                        if r.status_code != 200:
-                            continue
-                        with open(local_path, "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                if chunk:
-                                    f.write(chunk)
-                    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                        return local_path
-            except Exception:
-                continue
-    except Exception:
-        return None
-    return None
-
-
-def _download_audio_and_whisper(url: str, whisper_model: str = "small") -> Optional[str]:
-    """Download audio via yt-dlp and transcribe with faster-whisper as a last resort.
-    Uses low-resource settings to stay in free-tier limits but may still be heavy on CPU.
-    """
-    try:
-        import yt_dlp  # type: ignore
-        from faster_whisper import WhisperModel  # type: ignore
-        import tempfile
-        import shutil
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # First try Piped API (no cookies, best-effort)
-            audio_path = _try_download_audio_via_piped(url, tmpdir)
-            cookie_path = None
-            if YTDLP_COOKIES_B64:
-                try:
-                    import base64
-                    cookie_path = os.path.join(tmpdir, "cookies.txt")
-                    with open(cookie_path, "wb") as f:
-                        f.write(base64.b64decode(YTDLP_COOKIES_B64))
-                except Exception:
-                    cookie_path = None
-            if not audio_path:
-                # Download best audio with yt-dlp as fallback
-                ydl_opts = {
-                    "format": "bestaudio/best",
-                    "outtmpl": f"{tmpdir}/audio.%(ext)s",
-                    "quiet": True,
-                    "no_warnings": True,
-                    "restrictfilenames": True,
-                    "noplaylist": True,
-                    "cookiefile": cookie_path,
-                    "extractor_args": {"youtube": {"player_client": ["android", "tv_embedded"]}},
-                    "geo_bypass": True,
-                    "retries": 2,
-                    "fragment_retries": 2,
-                    "force_ipv4": True,
-                    "http_headers": {"User-Agent": "Mozilla/5.0"},
-                }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    audio_path = ydl.prepare_filename(info)
-                    # Ensure extension
-                    if not os.path.exists(audio_path):
-                        for ext in ("m4a", "webm", "mp3", "opus"):
-                            p = os.path.join(tmpdir, f"audio.{ext}")
-                            if os.path.exists(p):
-                                audio_path = p
-                                break
-
-            # Load Whisper model (CPU)
-            model = WhisperModel(whisper_model, device="cpu", compute_type="int8")
-            segments, _ = model.transcribe(audio_path, language=None, vad_filter=True)
-            text_parts: List[str] = []
-            for seg in segments:
-                if seg.text:
-                    text_parts.append(seg.text.strip())
-            text = " ".join(text_parts).strip()
-            return text or None
-    except Exception:
-        return None
+ 
 
 @app.get("/health")
 async def health_check():
