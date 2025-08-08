@@ -16,7 +16,6 @@ let API_BASE_URL = getApiBaseUrl();
 // DOM Elements
 const pdfForm = document.getElementById('pdf-form');
 const textForm = document.getElementById('text-form');
-const youtubeForm = document.getElementById('youtube-form');
 const loadingOverlay = document.getElementById('loading');
 const resultSection = document.getElementById('result');
 const summaryText = document.getElementById('summary-text');
@@ -57,7 +56,7 @@ function setupEventListeners() {
     // Form submissions
     pdfForm.addEventListener('submit', handlePdfSubmit);
     textForm.addEventListener('submit', handleTextSubmit);
-    if (youtubeForm) youtubeForm.addEventListener('submit', handleYoutubeSubmit);
+    // YouTube feature removed for free tier stability
     
     // Character counter
     inputText.addEventListener('input', updateCharCount);
@@ -238,20 +237,7 @@ async function handleTextSubmit(e) {
     await submitSummary(formData, 'text');
 }
 
-async function handleYoutubeSubmit(e) {
-    e.preventDefault();
-    const url = document.getElementById('youtube-url').value.trim();
-    const maxLength = document.getElementById('yt-max-length').value;
-    if (!url) {
-        showNotification('Please enter a YouTube URL', 'error');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('url', url);
-    formData.append('max_length', maxLength);
-    await submitSummary(formData, 'youtube');
-}
+// YouTube submission removed
 
 async function submitSummary(formData, type) {
     try {
@@ -259,7 +245,6 @@ async function submitSummary(formData, type) {
         
         let endpoint = '/summarize-text';
         if (type === 'pdf') endpoint = '/summarize-pdf';
-        else if (type === 'youtube') endpoint = '/summarize-youtube';
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             body: formData

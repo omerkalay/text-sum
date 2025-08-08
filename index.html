@@ -63,10 +63,6 @@
                         <i class="fas fa-keyboard"></i>
                         <span>Text Input</span>
                     </button>
-                    <button class="tab-btn" onclick="switchTab('youtube', this)">
-                        <i class="fab fa-youtube"></i>
-                        <span>YouTube URL</span>
-                    </button>
                 </div>
             </div>
 
@@ -138,35 +134,7 @@
                     </div>
                 </div>
 
-                <!-- YouTube Tab -->
-                <div id="youtube-tab" class="tab-content">
-                    <div class="text-card">
-                        <div class="text-header">
-                            <h3>Enter YouTube URL</h3>
-                            <div class="text-options">
-                                <label for="yt-max-length">Summary Length:</label>
-                                <select id="yt-max-length" name="max_length">
-                                    <option value="100">Short</option>
-                                    <option value="150" selected>Medium</option>
-                                    <option value="200">Long</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="warning-message info">
-                            <i class="fas fa-info-circle"></i>
-                            <span><strong>Note:</strong> Free tier supports videos up to <span id="yt-max-seconds">8 minutes</span>. Longer videos may be rejected.</span>
-                        </div>
-                        <form id="youtube-form">
-                            <div class="textarea-container">
-                                <input id="youtube-url" name="url" placeholder="https://www.youtube.com/watch?v=..."/>
-                            </div>
-                            <button type="submit" class="submit-btn">
-                                <i class="fas fa-magic"></i>
-                                <span>Generate Summary</span>
-                            </button>
-                        </form>
-                    </div>
-                </div>
+                
             </div>
 
             <!-- Loading State -->

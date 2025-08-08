@@ -50,7 +50,7 @@ Backend on Render (Free):
      ```
    - Env Vars: `HUGGINGFACE_TOKEN`, `SUMMARY_MODEL` (optional), `MAX_YT_SECONDS` (optional)
    - Health Check Path: `/health`
-3. If Whisper fallback is enabled, pin Python to 3.11 (prebuilt PyAV wheels). Either keep `runtime.txt` or set env `PYTHON_VERSION=3.11.9` in Render.
+3. No YouTube processing in free tier. Only PDF and Text summarization are supported for stability.
 
 Frontend on GitHub Pages:
 
@@ -94,8 +94,7 @@ python main.py
 
 - `POST /summarize-pdf` - Upload and summarize PDF files
 - `POST /summarize-text` - Summarize text input with intelligent length control
-- `POST /summarize-youtube` - Summarize YouTube video via transcript (no YouTube API key required)
-  - Free tier limit: up to 8 minutes per video (configurable via `MAX_YT_SECONDS`)
+- (YouTube endpoint removed in free tier for stability)
 - `GET /health` - API health check
 
 ## 🧠 Advanced AI Features

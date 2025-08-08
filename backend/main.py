@@ -9,9 +9,6 @@ import time
 import base64
 import random
 from dotenv import load_dotenv
-import xml.etree.ElementTree as ET
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
-from urllib.parse import urlparse, parse_qs
 
 # Load environment variables
 try:
@@ -39,57 +36,9 @@ app.add_middleware(
 BART_MODEL = os.getenv("SUMMARY_MODEL", "facebook/bart-large-cnn")
 BART_API_URL = f"https://api-inference.huggingface.co/models/{BART_MODEL}"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "").strip()
-YTDLP_COOKIES_B64 = os.getenv("YTDLP_COOKIES_B64", "").strip()
-YTDLP_COOKIES_URL = os.getenv("YTDLP_COOKIES_URL", "").strip()
-try:
-    MAX_YT_SECONDS = int(os.getenv("MAX_YT_SECONDS", "480"))  # default 8 minutes
-except Exception:
-    MAX_YT_SECONDS = 480
-PIPED_API_BASES = [b.strip() for b in os.getenv("PIPED_API_BASES", "").split(",") if b.strip()]
 
 headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"} if HUGGINGFACE_TOKEN else {}
-def _resolve_cookiefile_path(temp_dir: str) -> Optional[str]:
-    """Return a local cookie file path if cookies are provided via env (B64 or URL)."""
-    cookie_path = None
-    # Base64 provided
-    if YTDLP_COOKIES_B64:
-        try:
-            import base64
-            cookie_path = os.path.join(temp_dir, "cookies.txt")
-            with open(cookie_path, "wb") as f:
-                f.write(base64.b64decode(YTDLP_COOKIES_B64))
-            return cookie_path
-        except Exception:
-            cookie_path = None
-    # Remote URL provided
-    if YTDLP_COOKIES_URL:
-        try:
-            resp = requests.get(YTDLP_COOKIES_URL, timeout=10)
-            if resp.status_code == 200 and resp.content:
-                cookie_path = os.path.join(temp_dir, "cookies.txt")
-                content = resp.content
-                # Try base64-decode if it looks like base64
-                try:
-                    text_sample = content[:64].decode("utf-8", errors="ignore")
-                except Exception:
-                    text_sample = ""
-                wrote = False
-                # Heuristic: if content is base64 of Netscape header, decode
-                try:
-                    decoded = base64.b64decode(content, validate=False)
-                    if b"Netscape HTTP Cookie File" in decoded or decoded.startswith(b"#"):
-                        with open(cookie_path, "wb") as f:
-                            f.write(decoded)
-                        wrote = True
-                except Exception:
-                    wrote = False
-                if not wrote:
-                    with open(cookie_path, "wb") as f:
-                        f.write(content)
-                return cookie_path
-        except Exception:
-            cookie_path = None
-    return None
+# YouTube functionality removed in free tier: cookies, duration check, and audio download helpers deleted.
 
 
 def extract_text_from_pdf(pdf_file: UploadFile) -> str:
@@ -285,7 +234,6 @@ async def root():
         <ul>
             <li><code>POST /summarize-text</code> - Summarize text input</li>
             <li><code>POST /summarize-pdf</code> - Summarize PDF file</li>
-             <li><code>POST /summarize-youtube</code> - Summarize YouTube video via transcript</li>
             <li><code>GET /health</code> - Health check endpoint</li>
         </ul>
         
